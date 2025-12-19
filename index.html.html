@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secret Santa Picker 2025</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f8ff; }
+        h1 { color: #d32f2f; }
+        .picker-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin: 30px; }
+        .pick-button { 
+            width: 80px; height: 80px; background: #c62828; color: white; 
+            border: none; border-radius: 50%; font-size: 24px; cursor: pointer; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .pick-button:hover { background: #b71c1c; transform: scale(1.1); }
+        .pick-button:disabled { background: #666; cursor: not-allowed; transform: none; }
+        #reveal { margin: 30px; font-size: 24px; font-weight: bold; color: #2e7d32; }
+        #status { color: #555; }
+        .picked { background: #4caf50 !important; }
+    </style>
+</head>
+<body>
+    <h1>Secret Santa 2026</h1>
+    <p>Click one number to reveal who you are buying a gift for.<br>
+       <strong>One pick per person only.</strong> Remember your name and keep it secret!</p>
+    <div id="status">Loading...</div>
+    <div id="picker-container" class="picker-container"></div>
+    <div id="reveal"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <script>
+	// === PASTE YOUR FIREBASE CONFIG HERE ===
+        const firebaseConfig = {
+  apiKey: "AIzaSyBrIS8r3AyfEEuqCV_AdyAGnIR67zvOrVI",
+  authDomain: "secretsanta2026-c0720.firebaseapp.com",
+  projectId: "secretsanta2026-c0720",
+  storageBucket: "secretsanta2026-c0720.firebasestorage.app",
+  messagingSenderId: "1074251533272",
+  appId: "1:1074251533272:web:8090609574061fe4c700ad",
+  measurementId: "G-CP3EYD34QC"
+databaseURL: "https://secretsanta2026-c0720-default-rtdb.firebaseio.com/"
+};
+        // Replace the above with the config from your Firebase project
+
+       // === YOUR TEAM NAMES (in exact order everyone will type) ===
+    const colleagues = [
+        "Alice", "Bob", "Charlie", "David", "Eve",
+        "Frank", "Grace", "Henry", "Ivy", "Jack"
+        // ← Put ALL real names here, exactly as people will type them
+    ];
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const assignmentsRef = db.ref('assignments'); // Stores who buys for whom
+    const namesRef = db.ref('registeredNames');  // Stores who has entered name
+
+    const deviceId = localStorage.getItem('deviceId') || Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('deviceId', deviceId);
+
+    let myName = localStorage.getItem('myName');
+
+    function initApp() {
+        document.getElementById('picker-container').innerHTML = '';
+        document.getElementById('reveal').innerHTML = '';
+
+        if (!myName) {
+            // Step 1: Ask for name
+            document.getElementById('picker-container').innerHTML = `
+                <div style="margin: 30px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin-left: auto; margin-right: auto;">
+                    <h2 style="color: #d32f2f;">Secret Santa 2025 🎄</h2>
+                    <p>Please enter your name exactly as it appears in the group:</p>
+                    <input type="text" id="nameInput" list="nameSuggestions" placeholder="Type your name..." style="width: 80%; padding: 12px; font-size: 18px; border-radius: 8px; border: 1px solid #ccc;">
+                    <datalist id="nameSuggestions">
+                        ${colleagues.map(n => `<option value="${n}">`).join('')}
+                    </datalist>
+                    <br><br>
+                    <button onclick="registerName()" style="padding: 12px 24px; background: #2e7d32; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer;">Submit Name →</button>
+                </div>
+            `;
+        } else {
+            // Already registered — show their assignment
+            showMyAssignment();
+        }
+
+        updateStatus();
+    }
+
+    function registerName() {
+        const input = document.getElementById('nameInput').value.trim();
+        if (!input || !colleagues.includes(input)) {
+            alert('Please enter a valid name from the list!');
+            return;
+        }
+
+        if (localStorage.getItem('myName')) {
+            alert('You already registered!');
+            return;
+        }
+
+        myName = input;
+        localStorage.setItem('myName', myName);
+
+        // Register name and trigger assignment
+        namesRef.child(deviceId).set(myName).then(() => {
+            generateAssignmentsIfComplete();
+            showMyAssignment();
+        });
+    }
+
+    function showMyAssignment() {
+        document.getElementById('picker-container').innerHTML = `
+            <div style="margin: 40px; padding: 30px; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <h2>Hello, <strong>${myName}</strong>! 👋</h2>
+                <p>Checking your Secret Santa assignment...</p>
+                <h3 style="font-size: 48px; color: #2e7d32;" id="santaTarget">Loading...</h3>
+                <p><em>Keep this secret! Close the page after viewing.</em></p>
+            </div>
+        `;
+
+        // Listen for your assignment
+        assignmentsRef.child(myName).on('value', snap => {
+            const target = snap.val();
+            if (target) {
+                document.getElementById('santaTarget').innerHTML = `
+                    You are buying a gift for:<br>
+                    <strong style="font-size: 64px; color: #d32f2f;">${target}</strong>
+                `;
+            } else {
+                document.getElementById('santaTarget').textContent = 'Waiting for everyone to register...';
+            }
+        });
+    }
+
+    function generateAssignmentsIfComplete() {
+        namesRef.once('value').then(snap => {
+            const registered = snap.val() || {};
+            const registeredNames = Object.values(registered);
+
+            if (registeredNames.length === colleagues.length) {
+                // Everyone is in — generate fair assignments
+                let recipients = [...colleagues];
+                let valid = false;
+                let attempts = 0;
+
+                while (!valid && attempts < 100) {
+                    recipients = shuffle([...colleagues]);
+                    valid = true;
+                    for (let i = 0; i < colleagues.length; i++) {
+                        if (colleagues[i] === recipients[i]) {
+                            valid = false; // No self-picks
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+
+                if (valid) {
+                    const assignmentMap = {};
+                    colleagues.forEach((giver, i) => {
+                        assignmentMap[giver] = recipients[i];
+                    });
+                    assignmentsRef.set(assignmentMap);
+                }
+            }
+        });
+    }
+
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function updateStatus() {
+        namesRef.on('value', snap => {
+            const count = snap.numChildren();
+            document.getElementById('status').innerText = 
+                count < colleagues.length 
+                    ? `${count} of ${colleagues.length} people registered` 
+                    : 'All registered! Assignments ready 🎉';
+        });
+    }
+
+    // ADMIN SECTION
+    document.body.insertAdjacentHTML('beforeend', `
+        <br><br>
+        <details>
+            <summary style="cursor:pointer; color:#d32f2f;">🔑 Admin: View all assignments</summary>
+            <input type="password" id="adminPass" placeholder="Password">
+            <button onclick="showAdmin()">Show</button>
+            <div id="adminView" style="margin:20px;"></div>
+            <br><button onclick="if(confirm('Reset ALL data?')) {namesRef.remove(); assignmentsRef.remove(); location.reload();}" style="background:red; color:white;">ADMIN: Full Reset</button>
+        </details>
+    `);
+
+    function showAdmin() {
+        if (document.getElementById('adminPass').value !== 'YourSecretPassword123') { // ← CHANGE THIS
+            alert('Wrong!');
+            return;
+        }
+        assignmentsRef.once('value').then(snap => {
+            const assignments = snap.val() || {};
+            let html = '<h3>🎁 Full Secret Santa Assignments</h3><ul>';
+            colleagues.forEach(giver => {
+                const receiver = assignments[giver] || '(waiting)';
+                html += `<li><strong>${giver}</strong> → <strong>${receiver}</strong></li>`;
+            });
+            html += '</ul>';
+            document.getElementById('adminView').innerHTML = html;
+        });
+    }
+
+    // Start app
+    assignmentsRef.once('value').then(() => {
+        updateStatus();
+        initApp();
+    });
+</script>
